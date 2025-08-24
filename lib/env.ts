@@ -15,4 +15,15 @@ export const env = {
 
   // Gemini
   GEMINI_API_KEY: (process.env.GEMINI_API_KEY ?? "").trim(),
+
+  // Search provider for scraping-lite
+  SERPAPI_KEY: (process.env.SERPAPI_KEY ?? "").trim(),
+
+  // Lemon Squeezy
+  LEMONSQUEEZY_API_KEY: (process.env.LEMONSQUEEZY_API_KEY ?? "").trim(),
+  LEMONSQUEEZY_STORE_ID: (process.env.LEMONSQUEEZY_STORE_ID ?? "").trim(),
+  LEMONSQUEEZY_PRO_VARIANT_ID: (process.env.LEMONSQUEEZY_PRO_VARIANT_ID ?? "").trim(),
+  LEMONSQUEEZY_WEBHOOK_SECRET: (process.env.LEMONSQUEEZY_WEBHOOK_SECRET ?? "").trim(),
+  // Optional: direct buy URL (UUID-based), e.g. https://your-store.lemonsqueezy.com/buy/<uuid>
+  LEMONSQUEEZY_PRO_BUY_URL: (process.env.LEMONSQUEEZY_PRO_BUY_URL ?? "").trim(),
 } as const;

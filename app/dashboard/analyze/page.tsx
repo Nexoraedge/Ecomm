@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { DashboardLayout } from "@/components/dashboard-layout"
+import { useRouter } from "next/navigation"
+import { getSupabaseBrowser } from "@/lib/supabase-browser"
+import { useToast } from "@/hooks/use-toast"
 import {
   Search,
   Zap,
@@ -56,10 +58,15 @@ const scanningSteps = [
 ]
 
 export default function AnalyzePage() {
+  const router = useRouter()
+  const { toast } = useToast()
   const [isScanning, setIsScanning] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [progress, setProgress] = useState(0)
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     productName: "",
     description: "",
@@ -74,40 +81,150 @@ export default function AnalyzePage() {
     )
   }
 
-  const handleStartAnalysis = () => {
-    setIsScanning(true)
-    setCurrentStep(0)
-    setProgress(0)
+  const handleStartAnalysis = async () => {
+    if (isScanning) return
 
-    // Simulate scanning process
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        const newProgress = prev + Math.random() * 15 + 5
-        if (newProgress >= 100) {
-          clearInterval(interval)
-          setIsScanning(false)
-          setCurrentStep(scanningSteps.length)
-          return 100
+    // Ensure exactly one supported platform is selected for backend
+    const supported = ["amazon", "flipkart", "meesho"] as const
+    const chosen = selectedPlatforms.find((p) => supported.includes(p as any))
+    if (!chosen) {
+      toast({ title: "Select a supported platform", description: "Choose Amazon, Flipkart, or Meesho.", variant: "destructive" })
+      return
+    }
+
+    // Auth check
+    const supabase = getSupabaseBrowser()
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData?.user) {
+      router.push("/login")
+      return
+    }
+
+    try {
+      setIsScanning(true)
+      setCurrentStep(0)
+      setProgress(0)
+
+      // Ensure server-side user profile exists (auto-provision)
+      try {
+        const u = await fetch("/api/auth/user", { cache: "no-store" })
+        if (u.status === 401) {
+          router.push("/login")
+          return
         }
-        return newProgress
+      } catch {}
+
+      // Kick off create analysis
+      const res = await fetch("/api/analysis/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productName: formData.productName,
+          productDescription: formData.description,
+          productFeatures: formData.features,
+          category: formData.category,
+          targetPlatform: chosen,
+        }),
       })
 
-      setCurrentStep((prev) => {
-        const stepProgress = (progress / 100) * scanningSteps.length
-        return Math.min(Math.floor(stepProgress), scanningSteps.length - 1)
-      })
-    }, 800)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Failed to start analysis")
+      }
+      const payload = await res.json()
+      const id: string | undefined = payload?.id || payload?.analysisId || payload?.analysis?.id
+      if (!id) throw new Error("Invalid response from server")
+      setAnalysisId(id)
+
+      // Start progress animation (visual only)
+      intervalRef.current = setInterval(() => {
+        setProgress((prev) => {
+          const increment = Math.random() * 10 + 4
+          // Cap at 95% until completion flips it to 100
+          const cap = 95
+          const next = Math.min(prev + increment, cap)
+          const stepIdx = Math.min(
+            Math.floor((next / 100) * scanningSteps.length),
+            scanningSteps.length - 1,
+          )
+          setCurrentStep(stepIdx)
+          return next
+        })
+      }, 900)
+
+      // Start polling backend for status
+      const poll = async () => {
+        if (!id) return
+        const r = await fetch(`/api/analysis/status/${id}`)
+        if (r.status === 401) {
+          router.push("/login")
+          return
+        }
+        if (!r.ok) return
+        const j = await r.json()
+        if (j?.status === "completed") {
+          // Stop timers
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current)
+            intervalRef.current = null
+          }
+          if (pollRef.current) {
+            clearInterval(pollRef.current)
+            pollRef.current = null
+          }
+          setProgress(100)
+          setCurrentStep(scanningSteps.length)
+          setIsScanning(false)
+          router.push(`/dashboard/results/${id}`)
+        }
+      }
+      // Immediate check then interval
+      await poll()
+      pollRef.current = setInterval(poll, 2000)
+    } catch (e: any) {
+      console.error(e)
+      toast({ title: "Failed to start analysis", description: e.message ?? "Unexpected error", variant: "destructive" })
+      // Cleanup
+      setIsScanning(false)
+      setProgress(0)
+      setCurrentStep(0)
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      if (pollRef.current) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+      }
+    }
   }
 
   const handleCancelScan = () => {
     setIsScanning(false)
     setProgress(0)
     setCurrentStep(0)
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
   }
+
+  // cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      if (pollRef.current) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+      }
+    }
+  }, [])
 
   if (isScanning || progress === 100) {
     return (
-      <DashboardLayout>
         <div className="max-w-4xl mx-auto space-y-8">
           <div className="text-center">
             <h1 className="text-3xl font-bold text-foreground mb-2">
@@ -187,9 +304,9 @@ export default function AnalyzePage() {
                 ))}
               </div>
 
-              {progress === 100 && (
+              {progress === 100 && analysisId && (
                 <div className="text-center pt-4">
-                  <Button size="lg">
+                  <Button size="lg" onClick={() => router.push(`/dashboard/results/${analysisId}`)}>
                     View Results
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -245,12 +362,10 @@ export default function AnalyzePage() {
             </div>
           )}
         </div>
-      </DashboardLayout>
     )
   }
 
   return (
-    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground">New Product Analysis</h1>
@@ -361,7 +476,7 @@ export default function AnalyzePage() {
                     >
                       <Checkbox
                         checked={selectedPlatforms.includes(platform.id)}
-                        onChange={() => handlePlatformToggle(platform.id)}
+                        onCheckedChange={() => handlePlatformToggle(platform.id)}
                       />
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{platform.icon}</span>
@@ -471,6 +586,5 @@ export default function AnalyzePage() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
   )
 }

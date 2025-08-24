@@ -1,16 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { CreditCard, Download, Calendar, TrendingUp, CheckCircle, Zap, Star } from "lucide-react"
+import { Download, Calendar, TrendingUp, CheckCircle, Zap, Star } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { getSupabaseBrowser } from "@/lib/supabase-browser"
 
-const plans = [
+const initialPlans = [
   {
     name: "Free",
     price: 0,
@@ -25,19 +26,19 @@ const plans = [
     period: "month",
     description: "Most popular choice",
     features: [
-      "Unlimited analyses",
+      "600 analyses/month",
       "Advanced keyword research",
       "All platform support",
       "Export to PDF/CSV",
       "Priority support",
       "API access",
     ],
-    current: true,
+    current: false,
     popular: true,
   },
   {
     name: "Enterprise",
-    price: 99,
+    price: 29,
     period: "month",
     description: "For large teams",
     features: [
@@ -52,22 +53,157 @@ const plans = [
   },
 ]
 
-const billingHistory = [
-  { date: "2024-01-15", description: "Pro Plan - Monthly", amount: 29.0, status: "Paid" },
-  { date: "2023-12-15", description: "Pro Plan - Monthly", amount: 29.0, status: "Paid" },
-  { date: "2023-11-15", description: "Pro Plan - Monthly", amount: 29.0, status: "Paid" },
-  { date: "2023-10-15", description: "Pro Plan - Monthly", amount: 29.0, status: "Paid" },
-]
+type OrderItem = {
+  id: string
+  date: string
+  description: string
+  amount: number
+  currency: string
+  status: string
+}
 
 export default function BillingPage() {
   const { toast } = useToast()
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly")
+  const [plansState, setPlansState] = useState(initialPlans)
+  const [currentPlan, setCurrentPlan] = useState<"free" | "pro" | "enterprise">("free")
+  const [loadingPlan, setLoadingPlan] = useState(true)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [monthlyAnalyses, setMonthlyAnalyses] = useState<number>(0)
+  const [history, setHistory] = useState<OrderItem[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(true)
 
-  const handleUpgrade = (planName: string) => {
-    toast({
-      title: "Plan upgrade initiated",
-      description: `Upgrading to ${planName} plan. You'll be redirected to payment.`,
-    })
+  const supabase = getSupabaseBrowser()
+
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        const { data } = await supabase.auth.getUser()
+        const u = data.user
+        if (!u) return
+        const { data: profile } = await supabase
+          .from("users")
+          .select("subscription_plan, id")
+          .eq("auth_user_id", u.id)
+          .single()
+        const plan = (profile?.subscription_plan as string) || "free"
+        if (!active) return
+        setCurrentPlan(plan === "pro" ? "pro" : plan === "enterprise" ? "enterprise" : "free")
+        setPlansState((prev) =>
+          prev.map((p) => ({ ...p, current: p.name.toLowerCase() === (plan || "free") }))
+        )
+
+        if (profile?.id) {
+          setUserId(profile.id)
+          // Monthly usage count
+          const now = new Date()
+          const first = new Date(now.getFullYear(), now.getMonth(), 1)
+          const { count } = await supabase
+            .from("product_analyses")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", profile.id)
+            .gte("created_at", first.toISOString())
+            .lte("created_at", now.toISOString())
+          setMonthlyAnalyses(count ?? 0)
+        }
+      } finally {
+        if (active) setLoadingPlan(false)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [supabase])
+
+  // After returning from checkout, sync plan/credits if no webhooks configured
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("status") !== "success") return
+    ;(async () => {
+      try {
+        const r = await fetch("/api/billing/sync", { method: "POST" })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok || j?.ok === false) {
+          toast({ title: "Could not sync subscription", description: j?.error || j?.reason || "Please try again.", variant: "destructive" })
+          return
+        }
+        // Refresh plan and usage
+        const { data } = await supabase.auth.getUser()
+        const u = data.user
+        if (u) {
+          const { data: profile } = await supabase
+            .from("users")
+            .select("subscription_plan, id")
+            .eq("auth_user_id", u.id)
+            .single()
+          const plan = (profile?.subscription_plan as string) || "free"
+          setCurrentPlan(plan === "pro" ? "pro" : plan === "enterprise" ? "enterprise" : "free")
+          setPlansState((prev) => prev.map((p) => ({ ...p, current: p.name.toLowerCase() === (plan || "free") })))
+          if (profile?.id) {
+            const now = new Date()
+            const first = new Date(now.getFullYear(), now.getMonth(), 1)
+            const { count } = await supabase
+              .from("product_analyses")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", profile.id)
+              .gte("created_at", first.toISOString())
+              .lte("created_at", now.toISOString())
+            setMonthlyAnalyses(count ?? 0)
+          }
+        }
+        toast({ title: "Subscription activated", description: "Your Pro plan is now active with 600 credits." })
+      } catch (e: any) {
+        toast({ title: "Sync failed", description: e?.message || "Unexpected error" , variant: "destructive" })
+      }
+    })()
+  }, [supabase, toast])
+
+  // Load billing history from API
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        const res = await fetch("/api/billing/history")
+        if (!res.ok) throw new Error("Failed to load billing history")
+        const j = await res.json()
+        setHistory((j.data || []) as OrderItem[])
+      } catch {
+        setHistory([])
+      } finally {
+        if (active) setLoadingHistory(false)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const handleUpgrade = async (planName: string) => {
+    if (planName.toLowerCase() !== "pro") {
+      toast({ title: "Unsupported plan", description: "Only Pro is available via checkout.", variant: "destructive" })
+      return
+    }
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "pro" }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || "Failed to start checkout")
+      }
+      const j = await res.json()
+      const url = j.url as string
+      if (url) {
+        window.location.href = url
+      } else {
+        throw new Error("No checkout URL returned")
+      }
+    } catch (e: any) {
+      toast({ title: "Checkout error", description: e?.message || "Unexpected error", variant: "destructive" })
+    }
   }
 
   const handleDowngrade = () => {
@@ -86,7 +222,7 @@ export default function BillingPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="w-full px-4 md:px-8 py-6 space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Billing & Subscription</h1>
           <p className="text-muted-foreground mt-2">Manage your subscription and billing information</p>
@@ -113,14 +249,20 @@ export default function BillingPage() {
                       </CardTitle>
                       <CardDescription>Your active subscription details</CardDescription>
                     </div>
-                    <Badge variant="default">Pro Plan</Badge>
+                    <Badge variant={currentPlan === "pro" ? "default" : "secondary"}>
+                      {currentPlan === "pro" ? "Pro Plan" : currentPlan === "enterprise" ? "Enterprise" : "Free Plan"}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-2xl font-bold text-foreground">$29/month</h3>
-                      <p className="text-sm text-muted-foreground">Billed monthly • Next payment: Feb 15, 2024</p>
+                      <h3 className="text-2xl font-bold text-foreground">
+                        {currentPlan === "pro" ? "$29/month" : currentPlan === "enterprise" ? "$99/month" : "$0/month"}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {currentPlan === "free" ? "Free plan • Upgrade anytime" : "Billed monthly • Auto-renewal enabled"}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium text-foreground">Auto-renewal enabled</p>
@@ -136,7 +278,7 @@ export default function BillingPage() {
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span>Unlimited analyses</span>
+                        <span>600 analyses/month</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <CheckCircle className="h-4 w-4 text-green-600" />
@@ -154,9 +296,11 @@ export default function BillingPage() {
                   </div>
 
                   <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => handleUpgrade("Enterprise")} className="bg-transparent">
-                      Upgrade Plan
-                    </Button>
+                    {currentPlan !== "pro" && (
+                      <Button variant="outline" onClick={() => handleUpgrade("Pro")} className="bg-transparent">
+                        Upgrade to Pro
+                      </Button>
+                    )}
                     <Button variant="outline" onClick={handleDowngrade} className="bg-transparent">
                       Manage Subscription
                     </Button>
@@ -174,63 +318,26 @@ export default function BillingPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Analyses</span>
-                      <span className="font-medium">47 / Unlimited</span>
+                      <span className="font-medium">
+                        {monthlyAnalyses} / {currentPlan === "pro" ? 600 : 5}
+                      </span>
                     </div>
-                    <Progress value={47} className="h-2" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>API Calls</span>
-                      <span className="font-medium">1,247 / Unlimited</span>
-                    </div>
-                    <Progress value={25} className="h-2" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Exports</span>
-                      <span className="font-medium">23 / Unlimited</span>
-                    </div>
-                    <Progress value={23} className="h-2" />
+                    <Progress
+                      value={Math.min(100, (monthlyAnalyses / (currentPlan === "pro" ? 600 : 5)) * 100)}
+                      className="h-2"
+                    />
                   </div>
 
                   <div className="pt-4 border-t border-border">
                     <div className="flex items-center gap-2 text-sm text-green-600">
                       <TrendingUp className="h-4 w-4" />
-                      <span>+34% increase from last month</span>
+                      <span>Stay within your monthly limit to keep generating insights</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Payment Method */}
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Payment Method
-                </CardTitle>
-                <CardDescription>Manage your payment information</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">VISA</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">•••• •••• •••• 4242</p>
-                      <p className="text-sm text-muted-foreground">Expires 12/2027</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" className="bg-transparent">
-                    Update
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* Plans */}
@@ -260,7 +367,7 @@ export default function BillingPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {plans.map((plan) => (
+              {plansState.map((plan) => (
                 <Card
                   key={plan.name}
                   className={`border-border relative ${plan.popular ? "border-primary shadow-lg" : ""}`}
@@ -318,45 +425,47 @@ export default function BillingPage() {
                     </CardTitle>
                     <CardDescription>View and download your past invoices</CardDescription>
                   </div>
-                  <Button variant="outline" className="bg-transparent">
-                    <Download className="h-4 w-4 mr-2" />
-                    Download All
-                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {billingHistory.map((invoice, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 border border-border rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-1">
-                          <h4 className="font-medium text-foreground">{invoice.description}</h4>
-                          <Badge variant={invoice.status === "Paid" ? "default" : "secondary"}>{invoice.status}</Badge>
+                {loadingHistory ? (
+                  <p className="text-sm text-muted-foreground">Loading...</p>
+                ) : history.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No invoices found yet.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {history.map((invoice) => (
+                      <div key={invoice.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h4 className="font-medium text-foreground">{invoice.description}</h4>
+                            <Badge variant={invoice.status?.toLowerCase() === "paid" ? "default" : "secondary"}>{invoice.status}</Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(invoice.date).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            })}
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(invoice.date).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="font-medium text-foreground">${invoice.amount.toFixed(2)}</div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="font-medium text-foreground">{invoice.currency} {invoice.amount.toFixed(2)}</div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => downloadInvoice(invoice.date)}
+                            className="bg-transparent"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => downloadInvoice(invoice.date)}
-                          className="bg-transparent"
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

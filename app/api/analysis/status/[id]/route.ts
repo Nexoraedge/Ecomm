@@ -4,18 +4,19 @@ import { getSupabaseServerClient } from "@/lib/supabase-ssr";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  ctx: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await getSupabaseServerClient();
     const { data: authData, error: authErr } = await supabase.auth.getUser();
     if (authErr || !authData.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const { id } = await ctx.params;
     // Ensure analysis belongs to current user
     const { data, error } = await supabaseServer
       .from("product_analyses")
       .select("id, status, created_at, completed_at, user_id")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     if (error || !data) return NextResponse.json({ error: "Not found" }, { status: 404 });

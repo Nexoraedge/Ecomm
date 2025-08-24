@@ -83,3 +83,20 @@ create index if not exists idx_analyses_user_id on public.product_analyses(user_
 create index if not exists idx_competitor_analysis_id on public.competitor_data(analysis_id);
 create index if not exists idx_generated_analysis_id on public.generated_content(analysis_id);
 create index if not exists idx_usage_user_id on public.usage_analytics(user_id);
+
+  -- 7. keyword_metrics (persisted real-time metrics per analysis & keyword)
+  create table if not exists public.keyword_metrics (
+    id uuid primary key default gen_random_uuid(),
+    analysis_id uuid references public.product_analyses(id) on delete cascade,
+    keyword text not null,
+    avg_interest integer,
+    momentum integer,
+    volume_estimate integer, -- derived from trends (approximate)
+    cpc_estimate numeric, -- nullable; set when integrated with paid providers
+    samples jsonb,
+    badge text, -- e.g., Rising Fast, High & Stable, Falling
+    reason text,
+    created_at timestamptz default now()
+  );
+
+  create unique index if not exists uniq_keyword_metrics_analysis_keyword on public.keyword_metrics(analysis_id, keyword);

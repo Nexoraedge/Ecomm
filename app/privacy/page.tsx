@@ -1,8 +1,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Zap, ArrowLeft, Shield, Eye, Cookie, Database, Globe } from "lucide-react"
+import { ArrowLeft, Shield, Eye, Cookie, Database, Globe } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import Image from "next/image"
 
 export default function PrivacyPolicyPage() {
   return (
@@ -11,10 +12,8 @@ export default function PrivacyPolicyPage() {
       <header className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
-                <Zap className="h-5 w-5 text-primary-foreground" />
-              </div>
+            <Link href="/" className="flex items-center space-x-3">
+              <Image src="/Logo.png" alt="Logo" width={32} height={32} className="rounded" />
               <span className="text-xl font-bold text-foreground">SEO Boost</span>
             </Link>
             <Link href="/">
@@ -34,7 +33,7 @@ export default function PrivacyPolicyPage() {
             <p className="text-muted-foreground">
               Learn how we collect, use, and protect your personal information
             </p>
-            <Badge variant="secondary">Last updated: January 15, 2024</Badge>
+            <Badge variant="secondary">Last updated: August 24, 2025</Badge>
           </div>
 
           <div className="space-y-8">
@@ -248,4 +247,38 @@ export default function PrivacyPolicyPage() {
                   </div>
                   <div className="p-4 border border-border rounded-lg">
                     <h4 className="font-medium text-foreground mb-2">Access Controls</h4>
-                    <p className="text-sm text\
+                    <p className="text-sm text-muted-foreground">
+                      Role-based access and strict least-privilege policies safeguard your data
+                    </p>
+                  </div>
+                  <div className="p-4 border border-border rounded-lg">
+                    <h4 className="font-medium text-foreground mb-2">Monitoring</h4>
+                    <p className="text-sm text-muted-foreground">Continuous monitoring and audit logging</p>
+                  </div>
+                  <div className="p-4 border border-border rounded-lg">
+                    <h4 className="font-medium text-foreground mb-2">Backups</h4>
+                    <p className="text-sm text-muted-foreground">Automated backups with periodic recovery testing</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Contact */}
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle>Contact Us</CardTitle>
+                <CardDescription>Questions about this policy</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  If you have any questions or requests regarding this Privacy Policy, contact us at
+                  <span className="font-medium text-foreground"> support@nexoraedge.com</span>.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+      </div>
+    )
+  }

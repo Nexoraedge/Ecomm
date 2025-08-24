@@ -1,265 +1,195 @@
+import { getSupabaseServerClient } from "@/lib/supabase-ssr"
+import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { BarChart3, TrendingUp, Search, Clock, Plus, FileText, ArrowUpRight, Target, Zap } from "lucide-react"
-import { DashboardLayout } from "@/components/dashboard-layout"
+import Link from "next/link"
+import { supabaseServer } from "@/lib/supabase"
+import { BugReport } from "@/components/bug-report"
 
-export default function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  const supabase = await getSupabaseServerClient()
+  // If returning from OAuth provider, exchange code for a session on the server
+  const sp = (await searchParams) ?? {}
+  const codeParam = sp?.code
+  if (typeof codeParam === "string" && codeParam.length > 0) {
+    // Delegate code exchange to a route handler that can set cookies reliably
+    redirect(`/auth/callback?code=${encodeURIComponent(codeParam)}&redirect=${encodeURIComponent("/dashboard")}`)
+  }
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!user && !session) {
+    redirect("/login")
+  }
+
+  const displayUser = user ?? session?.user
+  const displayName =
+    (displayUser?.user_metadata?.name as string | undefined) ?? displayUser?.email ?? "User"
+
+  // Fetch previous analyses and recent bug reports for this user
+  let analyses: Array<{
+    id: string
+    product_name: string
+    target_platform: string
+    status: string
+    created_at: string
+    completed_at: string | null
+  }> = []
+  let bugReports: Array<{ id: string; title: string; status: string; priority: string; created_at: string }> = []
+  let plan: string | null = null
+  let creditsLeft: number | null = null
+  let usageThisMonth = 0
+  try {
+    const { data: dbUser } = await supabaseServer
+      .from("users")
+      .select("id, subscription_plan, analyses_remaining")
+      .eq("auth_user_id", displayUser!.id)
+      .single()
+
+    if (dbUser?.id) {
+      plan = dbUser.subscription_plan ?? "free"
+      creditsLeft = typeof dbUser.analyses_remaining === "number" ? dbUser.analyses_remaining : null
+
+      // Count analyses for current month
+      const now = new Date()
+      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const { count: monthlyCount } = await supabaseServer
+        .from("product_analyses")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", dbUser.id)
+        .gte("created_at", firstOfMonth.toISOString())
+        .lte("created_at", now.toISOString())
+      usageThisMonth = monthlyCount ?? 0
+      const { data: history } = await supabaseServer
+        .from("product_analyses")
+        .select("id, product_name, target_platform, status, created_at, completed_at")
+        .eq("user_id", dbUser.id)
+        .order("created_at", { ascending: false })
+        .limit(10)
+
+      analyses = history ?? []
+
+      const { data: reports } = await supabaseServer
+        .from("bug_reports")
+        .select("id, title, status, priority, created_at")
+        .eq("user_id", dbUser.id)
+        .order("created_at", { ascending: false })
+        .limit(5)
+
+      bugReports = reports ?? []
+    }
+  } catch {}
+
   return (
-    <DashboardLayout>
       <div className="space-y-8">
         {/* Welcome Section */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Welcome back, Priya!</h1>
-            <p className="text-muted-foreground mt-1">
-              Here's what's happening with your eCommerce optimization today.
-            </p>
+            <h1 className="text-3xl font-bold text-foreground">Welcome back, {displayName}!</h1>
+            <p className="text-muted-foreground mt-1">Get started by running a new analysis.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button variant="outline" className="bg-transparent">
-              <FileText className="h-4 w-4 mr-2" />
-              View Reports
-            </Button>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Analysis
+            <Button variant="outline" className="bg-transparent" asChild>
+              <Link href="/dashboard/analyze">New Analysis</Link>
             </Button>
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Analyses</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">47</div>
-              <p className="text-xs text-muted-foreground">
-                <span className="text-green-600">+12%</span> from last month
-              </p>
-            </CardContent>
-          </Card>
+        {/* Usage & Billing */}
+        <Card className="border-border">
+          <CardHeader>
+            <CardTitle>Usage & Billing</CardTitle>
+            <CardDescription>Your current plan and credits</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
+              <div>
+                <div className="text-sm text-muted-foreground">Plan</div>
+                <div className="text-lg font-medium capitalize">{plan ?? "free"}</div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Credits Left</div>
+                <div className="text-lg font-medium">{creditsLeft ?? "—"}</div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Usage This Month</div>
+                <div className="text-lg font-medium">{usageThisMonth}</div>
+              </div>
+              <div className="flex sm:justify-end">
+                <Button variant="outline" className="bg-transparent" asChild>
+                  <Link href="/dashboard/billing">Manage Billing</Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          <Card className="border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Keywords Found</CardTitle>
-              <Search className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">1,247</div>
-              <p className="text-xs text-muted-foreground">
-                <span className="text-green-600">+8%</span> from last month
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Platforms Used</CardTitle>
-              <Target className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">3</div>
-              <p className="text-xs text-muted-foreground">Amazon, Flipkart, Meesho</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg. Ranking Boost</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">+23%</div>
-              <p className="text-xs text-muted-foreground">
-                <span className="text-green-600">+5%</span> from last month
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
+        {/* Lists */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Recent Analyses */}
           <div className="lg:col-span-2">
             <Card className="border-border">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Recent Analyses</CardTitle>
-                    <CardDescription>Your latest product optimizations</CardDescription>
-                  </div>
-                  <Button variant="ghost" size="sm">
-                    View all
-                    <ArrowUpRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
+                <CardTitle>Recent Analyses</CardTitle>
+                <CardDescription>Your latest product optimizations will appear here</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {[
-                    {
-                      product: "Wireless Bluetooth Headphones",
-                      platform: "Amazon",
-                      status: "Completed",
-                      improvement: "+34%",
-                      date: "2 hours ago",
-                    },
-                    {
-                      product: "Cotton Summer T-Shirt",
-                      platform: "Flipkart",
-                      status: "Completed",
-                      improvement: "+28%",
-                      date: "5 hours ago",
-                    },
-                    {
-                      product: "Smartphone Case Cover",
-                      platform: "Meesho",
-                      status: "Processing",
-                      improvement: "Pending",
-                      date: "1 day ago",
-                    },
-                    {
-                      product: "Kitchen Cookware Set",
-                      platform: "Amazon",
-                      status: "Completed",
-                      improvement: "+41%",
-                      date: "2 days ago",
-                    },
-                  ].map((analysis, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 border border-border rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h4 className="font-medium text-foreground">{analysis.product}</h4>
-                          <Badge variant="secondary" className="text-xs">
-                            {analysis.platform}
-                          </Badge>
+                {analyses.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No analyses yet. Start your first one from Analyze.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {analyses.map((a) => (
+                      <div key={a.id} className="flex items-center justify-between rounded-md border p-3">
+                        <div>
+                          <div className="font-medium">{a.product_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Platform: {a.target_platform} • Status: {a.status} • {new Date(a.created_at).toLocaleString()}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {analysis.date}
-                          </span>
-                          <Badge
-                            variant={analysis.status === "Completed" ? "default" : "secondary"}
-                            className="text-xs"
-                          >
-                            {analysis.status}
-                          </Badge>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/dashboard/results/${a.id}`}>View</Link>
+                          </Button>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium text-foreground">{analysis.improvement}</div>
-                        <div className="text-xs text-muted-foreground">SEO boost</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
-
-          {/* Activity Feed & Quick Actions */}
           <div className="space-y-6">
-            {/* Usage Progress */}
             <Card className="border-border">
               <CardHeader>
-                <CardTitle className="text-lg">Monthly Usage</CardTitle>
-                <CardDescription>Pro Plan - Unlimited analyses</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Analyses this month</span>
-                    <span className="font-medium">47</span>
-                  </div>
-                  <Progress value={47} className="h-2" />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Keywords discovered</span>
-                    <span className="font-medium">1,247</span>
-                  </div>
-                  <Progress value={78} className="h-2" />
-                </div>
-                <Button variant="outline" className="w-full bg-transparent">
-                  Upgrade Plan
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-start bg-transparent">
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Product Analysis
-                </Button>
-                <Button variant="outline" className="w-full justify-start bg-transparent">
-                  <Search className="h-4 w-4 mr-2" />
-                  Keyword Research
-                </Button>
-                <Button variant="outline" className="w-full justify-start bg-transparent">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Export Reports
-                </Button>
-                <Button variant="outline" className="w-full justify-start bg-transparent">
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  View Analytics
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Recent Activity */}
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="text-lg">Recent Activity</CardTitle>
+                <CardTitle className="text-lg">Recent Bug Reports</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {[
-                    {
-                      action: "Analysis completed",
-                      product: "Wireless Headphones",
-                      time: "2h ago",
-                      icon: <Zap className="h-4 w-4" />,
-                    },
-                    {
-                      action: "Keywords updated",
-                      product: "Summer T-Shirt",
-                      time: "5h ago",
-                      icon: <Search className="h-4 w-4" />,
-                    },
-                    {
-                      action: "Report exported",
-                      product: "Phone Case",
-                      time: "1d ago",
-                      icon: <FileText className="h-4 w-4" />,
-                    },
-                  ].map((activity, index) => (
-                    <div key={index} className="flex items-center gap-3">
-                      <div className="h-8 w-8 bg-muted rounded-full flex items-center justify-center">
-                        {activity.icon}
+                {bugReports.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No bug reports yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {bugReports.map((r) => (
+                      <div key={r.id} className="rounded-md border p-3">
+                        <div className="text-sm font-medium">{r.title}</div>
+                        <div className="text-xs text-muted-foreground">{r.status} • {r.priority} • {new Date(r.created_at).toLocaleString()}</div>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-foreground">{activity.action}</p>
-                        <p className="text-xs text-muted-foreground">{activity.product}</p>
-                      </div>
-                      <span className="text-xs text-muted-foreground">{activity.time}</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
+
+        {/* Floating bug report button */}
+        <BugReport />
       </div>
-    </DashboardLayout>
   )
 }

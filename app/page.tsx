@@ -24,9 +24,7 @@ export default function LandingPage() {
                   Sign In
                 </Button>
               </Link>
-              <Link href="/login">
-                <Button>Get Started</Button>
-              </Link>
+              
             </div>
           </div>
         </div>
@@ -56,9 +54,7 @@ export default function LandingPage() {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Button variant="outline" size="lg" className="text-lg px-8 py-6 bg-transparent">
-                Watch Demo
-              </Button>
+              
             </div>
             <p className="text-sm text-muted-foreground mt-4">No credit card required • 5 free analyses included</p>
           </div>
@@ -167,13 +163,7 @@ export default function LandingPage() {
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-lg px-8 py-6 border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary bg-transparent"
-            >
-              Schedule Demo
-            </Button>
+            
           </div>
           <p className="text-sm mt-4 opacity-75">No credit card required • 14-day money-back guarantee</p>
         </div>

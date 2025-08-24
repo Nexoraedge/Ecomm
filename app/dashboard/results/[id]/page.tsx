@@ -2,13 +2,12 @@
 
 import { Label } from "@/components/ui/label"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
-import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   Copy,
   Download,
@@ -24,84 +23,119 @@ import {
   Eye,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useParams, useRouter } from "next/navigation"
 
-const mockResults = {
-  productName: "Wireless Bluetooth Headphones with Active Noise Cancellation",
-  platform: "Amazon",
-  category: "Electronics & Gadgets",
-  analysisDate: "2024-01-15T10:30:00Z",
-  optimizedTitle:
-    "Premium Wireless Bluetooth Headphones - Active Noise Cancelling, 30H Battery Life, Hi-Fi Stereo Sound, Built-in Mic for Calls, Foldable Design - Perfect for Travel, Work & Gaming",
-  optimizedDescription: `Experience superior audio quality with these premium wireless Bluetooth headphones featuring advanced active noise cancellation technology. 
+type Analysis = {
+  id: string
+  product_name: string
+  product_description: string | null
+  category: string | null
+  target_platform: string
+  status: string
+  created_at: string
+  completed_at: string | null
+}
 
-🎧 **Key Features:**
-• **Active Noise Cancellation** - Block out distractions with industry-leading ANC technology
-• **30-Hour Battery Life** - All-day listening with quick 15-minute charge for 3 hours playback
-• **Hi-Fi Stereo Sound** - Premium 40mm drivers deliver crystal-clear audio across all frequencies
-• **Comfortable Design** - Soft protein leather ear cushions and adjustable headband for extended wear
-• **Built-in Microphone** - Crystal-clear hands-free calling with noise reduction
-• **Foldable & Portable** - Compact design with carrying case for easy travel
+type Content = {
+  optimized_title: string
+  optimized_description: string
+  recommended_keywords: string[] | null
+  seo_score: number | null
+}
 
-🔊 **Perfect For:**
-✓ Daily commuting and travel
-✓ Work from home and office calls
-✓ Gaming and entertainment
-✓ Fitness and outdoor activities
+type Metrics = {
+  keywordDensityPercent: number
+  readability: number
+  competitiveStrength: number
+  expectedBoost: number
+  titleImprovementPercent: number
+}
 
-📱 **Universal Compatibility** - Works seamlessly with iPhone, Android, tablets, laptops, and all Bluetooth-enabled devices.
+type TagsAgg = {
+  top: { tag: string; count: number }[]
+  totalUnique: number
+}
 
-⚡ **What's Included:** Headphones, USB-C charging cable, 3.5mm audio cable, carrying case, user manual
+type KeywordOverlap = {
+  recommendedInCompetitors: string[]
+}
 
-🛡️ **Quality Guarantee** - 2-year warranty with 30-day money-back guarantee. Premium customer support available 24/7.`,
-  keywords: [
-    { keyword: "wireless bluetooth headphones", volume: 45000, difficulty: "Medium", trend: "+12%" },
-    { keyword: "noise cancelling headphones", volume: 33000, difficulty: "High", trend: "+8%" },
-    { keyword: "active noise cancellation", volume: 22000, difficulty: "Medium", trend: "+15%" },
-    { keyword: "bluetooth headphones with mic", volume: 18000, difficulty: "Low", trend: "+5%" },
-    { keyword: "wireless headphones long battery", volume: 12000, difficulty: "Low", trend: "+20%" },
-    { keyword: "foldable bluetooth headphones", volume: 8500, difficulty: "Low", trend: "+10%" },
-    { keyword: "premium audio headphones", volume: 6200, difficulty: "Medium", trend: "+7%" },
-    { keyword: "travel headphones wireless", volume: 4800, difficulty: "Low", trend: "+18%" },
-  ],
-  competitors: [
-    {
-      rank: 1,
-      title: "Sony WH-1000XM4 Wireless Premium Noise Canceling Overhead Headphones",
-      rating: 4.4,
-      reviews: 89234,
-    },
-    {
-      rank: 2,
-      title: "Bose QuietComfort 45 Bluetooth Wireless Noise Cancelling Headphones",
-      rating: 4.3,
-      reviews: 67891,
-    },
-    { rank: 3, title: "Apple AirPods Max - Sky Blue Premium Over-Ear Headphones", rating: 4.5, reviews: 45672 },
-    { rank: 4, title: "Sennheiser Momentum 3 Wireless Noise Cancelling Headphones", rating: 4.2, reviews: 34567 },
-    { rank: 5, title: "JBL Live 660NC Wireless Over-Ear Noise Cancelling Headphones", rating: 4.1, reviews: 28934 },
-  ],
-  trendingTags: [
-    "Active Noise Cancellation",
-    "30H Battery Life",
-    "Hi-Fi Stereo",
-    "Foldable Design",
-    "Premium Quality",
-    "Travel Friendly",
-    "Gaming Headphones",
-    "Work From Home",
-  ],
-  performanceMetrics: {
-    seoScore: 92,
-    keywordDensity: 8.5,
-    readabilityScore: 85,
-    competitiveStrength: 78,
-    expectedRankingBoost: 34,
-  },
+type KeywordMetricRow = {
+  keyword: string
+  avgInterest: number
+  momentum: number
+  samples: number[]
+  recommendation: string
+  volume_estimate?: number | null
+  cpc_estimate?: number | null
+  badge?: string
+  reason?: string
+}
+
+type Competitor = {
+  competitor_title: string
+  rating?: number | null
+  price?: number | null
 }
 
 export default function ResultsPage() {
   const { toast } = useToast()
+  const router = useRouter()
+  const params = useParams<{ id: string }>()
   const [activeTab, setActiveTab] = useState("content")
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const [content, setContent] = useState<Content | null>(null)
+  const [competitors, setCompetitors] = useState<Competitor[]>([])
+  const [metrics, setMetrics] = useState<Metrics | null>(null)
+  const [tags, setTags] = useState<TagsAgg | null>(null)
+  const [overlap, setOverlap] = useState<KeywordOverlap | null>(null)
+  const [keywordMetrics, setKeywordMetrics] = useState<KeywordMetricRow[]>([])
+
+  useEffect(() => {
+    const id = params?.id
+    if (!id) return
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(`/api/analysis/${id}`)
+        if (res.status === 401) {
+          router.push("/login")
+          return
+        }
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to load analysis")
+        const j = await res.json()
+        setAnalysis(j.analysis)
+        setContent(j.content)
+        setCompetitors(j.competitors || [])
+        setMetrics(j.metrics || null)
+        setTags(j.tags || null)
+        setOverlap(j.keywordOverlap || null)
+        setKeywordMetrics(j.keywordMetrics || [])
+      } catch (e: any) {
+        setError(e?.message || "Unexpected error")
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [params?.id, router])
+
+  const header = useMemo(() => {
+    return {
+      productName: analysis?.product_name || "Analysis",
+      platform: analysis?.target_platform || "—",
+      analysisDate: analysis?.created_at || new Date().toISOString(),
+    }
+  }, [analysis])
+
+  // Improvement styling helpers
+  const titleImprovement = metrics?.titleImprovementPercent ?? 0
+  const improvementColor =
+    titleImprovement > 0 ? "text-green-600" : titleImprovement < 0 ? "text-red-600" : "text-muted-foreground"
+  const improvementPrefix = titleImprovement > 0 ? "+" : ""
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -141,15 +175,19 @@ export default function ResultsPage() {
   }
 
   return (
-    <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-8">
+        {loading && (
+          <div className="text-center text-muted-foreground">Loading analysis...</div>
+        )}
+        {error && (
+          <div className="text-center text-red-600">{error}</div>
+        )}
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Analysis Results</h1>
             <p className="text-muted-foreground mt-1">
-              {mockResults.productName} • {mockResults.platform} •{" "}
-              {new Date(mockResults.analysisDate).toLocaleDateString()}
+              {header.productName} • {header.platform} • {new Date(header.analysisDate).toLocaleDateString()}
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -179,7 +217,7 @@ export default function ResultsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">SEO Score</p>
-                  <p className="text-2xl font-bold text-foreground">{mockResults.performanceMetrics.seoScore}/100</p>
+                  <p className="text-2xl font-bold text-foreground">{content?.seo_score ?? 0}/100</p>
                 </div>
                 <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center">
                   <CheckCircle className="h-5 w-5 text-green-600" />
@@ -193,7 +231,7 @@ export default function ResultsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Keyword Density</p>
-                  <p className="text-2xl font-bold text-foreground">{mockResults.performanceMetrics.keywordDensity}%</p>
+                  <p className="text-2xl font-bold text-foreground">{metrics?.keywordDensityPercent ?? 0}%</p>
                 </div>
                 <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center">
                   <Search className="h-5 w-5 text-primary" />
@@ -207,9 +245,7 @@ export default function ResultsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Readability</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {mockResults.performanceMetrics.readabilityScore}/100
-                  </p>
+                  <p className="text-2xl font-bold text-foreground">{metrics?.readability ?? 0}/100</p>
                 </div>
                 <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
                   <Eye className="h-5 w-5 text-blue-600" />
@@ -223,9 +259,7 @@ export default function ResultsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Competitive Strength</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {mockResults.performanceMetrics.competitiveStrength}/100
-                  </p>
+                  <p className="text-2xl font-bold text-foreground">{metrics?.competitiveStrength ?? 0}/100</p>
                 </div>
                 <div className="h-10 w-10 bg-orange-100 rounded-lg flex items-center justify-center">
                   <Target className="h-5 w-5 text-orange-600" />
@@ -239,9 +273,7 @@ export default function ResultsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Expected Boost</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    +{mockResults.performanceMetrics.expectedRankingBoost}%
-                  </p>
+                  <p className="text-2xl font-bold text-foreground">+{metrics?.expectedBoost ?? 0}%</p>
                 </div>
                 <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center">
                   <TrendingUp className="h-5 w-5 text-green-600" />
@@ -271,7 +303,7 @@ export default function ResultsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => copyToClipboard(mockResults.optimizedTitle, "Optimized title")}
+                      onClick={() => copyToClipboard(content?.optimized_title || "", "Optimized title")}
                       className="bg-transparent"
                     >
                       <Copy className="h-4 w-4 mr-2" />
@@ -282,10 +314,10 @@ export default function ResultsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="p-4 bg-muted/30 rounded-lg border border-border">
-                    <p className="text-sm leading-relaxed">{mockResults.optimizedTitle}</p>
+                    <p className="text-sm leading-relaxed">{content?.optimized_title || "—"}</p>
                   </div>
                   <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
-                    <span>Length: {mockResults.optimizedTitle.length} characters</span>
+                    <span>Length: {(content?.optimized_title || "").length} characters</span>
                     <Badge variant="secondary">Optimal</Badge>
                   </div>
                 </CardContent>
@@ -301,18 +333,21 @@ export default function ResultsPage() {
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground">Original Title</Label>
                     <div className="p-3 bg-red-50 border border-red-200 rounded-lg mt-1">
-                      <p className="text-sm">Wireless Bluetooth Headphones with Active Noise Cancellation</p>
+                      <p className="text-sm">{analysis?.product_name || "—"}</p>
                     </div>
                   </div>
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground">Optimized Title</Label>
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg mt-1">
-                      <p className="text-sm">{mockResults.optimizedTitle}</p>
+                      <p className="text-sm">{content?.optimized_title || "—"}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <TrendingUp className="h-4 w-4 text-green-600" />
-                    <span className="text-green-600 font-medium">+34% expected ranking boost</span>
+                    <TrendingUp className={`h-4 w-4 ${improvementColor}`} />
+                    <span className={`${improvementColor} font-medium`}>
+                      {improvementPrefix}
+                      {titleImprovement}% title improvement
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -331,7 +366,7 @@ export default function ResultsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => copyToClipboard(mockResults.optimizedDescription, "Optimized description")}
+                    onClick={() => copyToClipboard(content?.optimized_description || "", "Optimized description")}
                     className="bg-transparent"
                   >
                     <Copy className="h-4 w-4 mr-2" />
@@ -343,13 +378,13 @@ export default function ResultsPage() {
                 <div className="p-6 bg-muted/30 rounded-lg border border-border">
                   <div className="prose prose-sm max-w-none">
                     <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                      {mockResults.optimizedDescription}
+                      {content?.optimized_description || "—"}
                     </pre>
                   </div>
                 </div>
                 <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
-                  <span>Length: {mockResults.optimizedDescription.length} characters</span>
-                  <span>Keywords: 8 integrated</span>
+                  <span>Length: {(content?.optimized_description || "").length} characters</span>
+                  <span>Keywords: {content?.recommended_keywords?.length ?? 0} integrated</span>
                   <Badge variant="secondary">High Converting</Badge>
                 </div>
               </CardContent>
@@ -358,6 +393,21 @@ export default function ResultsPage() {
 
           {/* Keywords Tab */}
           <TabsContent value="keywords" className="space-y-6">
+            {/* Overlap summary */}
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="text-lg">Keyword Coverage</CardTitle>
+                <CardDescription>
+                  {metrics ? `${metrics.keywordDensityPercent}% of recommended keywords are used in the description` : ""}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-muted-foreground">
+                  {overlap?.recommendedInCompetitors?.length ?? 0} of {content?.recommended_keywords?.length ?? 0} keywords are also used by competitors
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border-border">
               <CardHeader>
                 <CardTitle className="text-lg">Recommended Keywords</CardTitle>
@@ -365,32 +415,23 @@ export default function ResultsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {mockResults.keywords.map((keyword, index) => (
+                  {(content?.recommended_keywords ?? []).map((kw, index) => (
                     <div key={index} className="flex items-center justify-between p-4 border border-border rounded-lg">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h4 className="font-medium text-foreground">{keyword.keyword}</h4>
-                          <Badge
-                            variant={
-                              keyword.difficulty === "Low"
-                                ? "default"
-                                : keyword.difficulty === "Medium"
-                                  ? "secondary"
-                                  : "destructive"
-                            }
-                          >
-                            {keyword.difficulty}
-                          </Badge>
+                          <h4 className="font-medium text-foreground">{kw}</h4>
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>Volume: {keyword.volume.toLocaleString()}/month</span>
-                          <span className="text-green-600">Trend: {keyword.trend}</span>
+                          <span>Suggested keyword</span>
+                          {overlap?.recommendedInCompetitors?.includes(kw) && (
+                            <Badge variant="secondary">Competitors use this</Badge>
+                          )}
                         </div>
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => copyToClipboard(keyword.keyword, "Keyword")}
+                        onClick={() => copyToClipboard(kw, "Keyword")}
                         className="bg-transparent"
                       >
                         <Copy className="h-4 w-4" />
@@ -405,21 +446,87 @@ export default function ResultsPage() {
             <Card className="border-border">
               <CardHeader>
                 <CardTitle className="text-lg">Trending Tags</CardTitle>
-                <CardDescription>Popular tags and phrases in your category</CardDescription>
+                <CardDescription>Popular tags and phrases among top competitors</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {mockResults.trendingTags.map((tag, index) => (
+                  {(tags?.top ?? []).map(({ tag, count }, index) => (
                     <Badge
                       key={index}
                       variant="secondary"
                       className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
                       onClick={() => copyToClipboard(tag, "Tag")}
                     >
-                      {tag}
+                      {tag} • {count}
                     </Badge>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Keyword Metrics (real-time) */}
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="text-lg">Keyword Metrics (Real-time)</CardTitle>
+                <CardDescription>Interest and momentum from Google Trends via SerpAPI</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {keywordMetrics.length ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-muted-foreground">
+                          <th className="py-2 pr-4 font-medium">Keyword</th>
+                          <th className="py-2 pr-4 font-medium">Interest</th>
+                          <th className="py-2 pr-4 font-medium">Momentum</th>
+                          <th className="py-2 pr-4 font-medium">Volume</th>
+                          <th className="py-2 pr-4 font-medium">CPC</th>
+                          <th className="py-2 pr-4 font-medium">Badge</th>
+                          <th className="py-2 pr-4 font-medium">Recommendation</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {keywordMetrics.map((row, i) => (
+                          <tr key={i} className="border-t border-border">
+                            <td className="py-2 pr-4">
+                              <span className="text-foreground">{row.keyword}</span>
+                            </td>
+                            <td className="py-2 pr-4">
+                              <span className="font-medium text-foreground">{row.avgInterest}</span>
+                              <span className="text-muted-foreground">/100</span>
+                            </td>
+                            <td className="py-2 pr-4">
+                              <span className={row.momentum >= 0 ? "text-green-600" : "text-red-600"}>
+                                {row.momentum >= 0 ? "+" : ""}{row.momentum}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-4">
+                              {row.volume_estimate ?? "—"}
+                            </td>
+                            <td className="py-2 pr-4">
+                              {typeof row.cpc_estimate === "number" ? `$${row.cpc_estimate.toFixed(2)}` : "—"}
+                            </td>
+                            <td className="py-2 pr-4">
+                              {row.badge ? (
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="secondary">{row.badge}</Badge>
+                                  {row.reason && (
+                                    <span className="text-xs text-muted-foreground">{row.reason}</span>
+                                  )}
+                                </div>
+                              ) : "—"}
+                            </td>
+                            <td className="py-2 pr-4">
+                              <Badge variant="secondary">{row.recommendation}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No metrics available yet.</div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -433,21 +540,18 @@ export default function ResultsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {mockResults.competitors.map((competitor, index) => (
+                  {competitors.map((competitor, index) => (
                     <div key={index} className="flex items-center justify-between p-4 border border-border rounded-lg">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <Badge variant="outline" className="text-xs">
-                            #{competitor.rank}
-                          </Badge>
-                          <h4 className="font-medium text-foreground line-clamp-1">{competitor.title}</h4>
+                          <h4 className="font-medium text-foreground line-clamp-1">{competitor.competitor_title}</h4>
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            <span>{competitor.rating}</span>
+                            <span>{competitor.rating ?? "—"}</span>
                           </div>
-                          <span>{competitor.reviews.toLocaleString()} reviews</span>
+                          {competitor.price != null && <span>Price: {competitor.price}</span>}
                         </div>
                       </div>
                       <Button variant="ghost" size="sm">
@@ -528,6 +632,5 @@ export default function ResultsPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
   )
 }
