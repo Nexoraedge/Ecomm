@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 export async function getSupabaseServerClient() {
   // Next.js 15: cookies() can be async; await to satisfy sync dynamic APIs warning.
   const cookieStore = await cookies();
-  const supabase = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+  const supabase = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
       get(name: string) {
         return cookieStore.get(name)?.value;
