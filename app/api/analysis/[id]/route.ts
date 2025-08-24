@@ -45,11 +45,21 @@ export async function GET(
         .order("scraped_at", { ascending: false }),
     ]);
 
-    const contentRow: any = content?.[0] ?? null;
-    const compRows: any[] = competitors ?? [];
+    type ContentRow = {
+      recommended_keywords?: unknown;
+      optimized_description?: unknown;
+      optimized_title?: unknown;
+      seo_score?: unknown;
+    } | null;
+    type CompetitorRow = { extracted_keywords?: unknown };
+
+    const contentRow: ContentRow = (content?.[0] ?? null) as ContentRow;
+    const compRows: CompetitorRow[] = (competitors ?? []) as CompetitorRow[];
 
     // Compute aggregate keyword stats from competitors
-    const allCompKeywords: string[] = compRows.flatMap((c: any) => Array.isArray(c.extracted_keywords) ? c.extracted_keywords : []);
+    const allCompKeywords: string[] = compRows.flatMap((c) =>
+      Array.isArray(c.extracted_keywords) ? (c.extracted_keywords as unknown[]).map((x) => String(x)) : []
+    );
     const tagMap = new Map<string, number>();
     for (const k of allCompKeywords) {
       const key = String(k).toLowerCase();
@@ -61,20 +71,22 @@ export async function GET(
       .map(([tag, count]) => ({ tag, count }));
 
     // Keyword density: % of recommended keywords present in optimized description
-    const recommended: string[] = Array.isArray(contentRow?.recommended_keywords) ? contentRow.recommended_keywords : [];
-    const desc: string = String(contentRow?.optimized_description || "").toLowerCase();
+    const recommended: string[] = Array.isArray(contentRow?.recommended_keywords)
+      ? (contentRow!.recommended_keywords as unknown[]).map((x) => String(x))
+      : [];
+    const desc: string = String(contentRow?.optimized_description ?? "").toLowerCase();
     const present = recommended.filter((kw) => desc.includes(String(kw).toLowerCase()));
     const keywordDensityPercent = recommended.length ? Math.round((present.length / recommended.length) * 100) : 0;
 
     // Title improvement heuristic: overlap increase vs original product name words
     const origWords = String(analysis.product_name || "").toLowerCase().split(/\W+/).filter(Boolean);
-    const optTitle = String(contentRow?.optimized_title || "").toLowerCase();
+    const optTitle = String(contentRow?.optimized_title ?? "").toLowerCase();
     const overlap = recommended.filter((kw) => optTitle.includes(String(kw).toLowerCase())).length;
     const baseOverlap = recommended.filter((kw) => origWords.includes(String(kw).toLowerCase())).length;
     const titleImprovementPercent = Math.max(0, Math.min(100, (overlap - baseOverlap) * 12));
 
     // Readability heuristic based on description length and sentence structure
-    const len = (contentRow?.optimized_description || '').length;
+    const len = String(contentRow?.optimized_description ?? '').length;
     const readability = Math.max(40, Math.min(95, Math.round(60 + (600 - Math.abs(600 - len)) / 40)));
 
     // Competitive strength heuristic based on competitor count and tag diversity
@@ -91,7 +103,18 @@ export async function GET(
     const recommendedInCompetitors = recommended.filter((kw) => competitorKeywordSet.has(String(kw).toLowerCase()));
 
     // Real-time keyword metrics using SerpAPI Google Trends
-    let keywordMetrics: any[] = [];
+    type KeywordMetric = {
+      keyword: string;
+      avgInterest: number;
+      momentum: number;
+      samples: number[];
+      volume_estimate: number;
+      cpc_estimate: number | null;
+      badge: string;
+      reason: string;
+      recommendation: string;
+    };
+    let keywordMetrics: KeywordMetric[] = [];
     try {
       if (recommended.length) {
         const ks = new KeywordsService();
@@ -160,7 +183,8 @@ export async function GET(
       },
       keywordMetrics,
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Unexpected error" }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unexpected error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

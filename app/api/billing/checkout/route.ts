@@ -94,7 +94,8 @@ export async function POST(req: Request) {
     if (!url) return NextResponse.json({ error: "No checkout URL returned" }, { status: 500 });
 
     return NextResponse.json({ url });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Unexpected error" }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unexpected error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

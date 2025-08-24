@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  let payload: any;
+  let payload: unknown;
   try {
     payload = JSON.parse(raw);
   } catch {
@@ -32,9 +32,15 @@ export async function POST(req: Request) {
   }
 
   // Extract user id from custom metadata
-  const metaCustom = payload?.meta?.custom || payload?.data?.attributes?.checkout_data?.custom || {};
-  const userId: string | undefined = metaCustom.user_id;
-  const event = payload?.meta?.event_name || payload?.event || "";
+  type LSCheckoutPayload = {
+    meta?: { custom?: Record<string, unknown>; event_name?: string };
+    event?: string;
+    data?: { attributes?: { checkout_data?: { custom?: Record<string, unknown> } } };
+  };
+  const p = (payload as LSCheckoutPayload) ?? {};
+  const metaCustom = p.meta?.custom || p.data?.attributes?.checkout_data?.custom || {};
+  const userId = typeof metaCustom.user_id === "string" ? metaCustom.user_id : undefined;
+  const event = typeof p.meta?.event_name === "string" ? p.meta.event_name : (typeof p.event === "string" ? p.event : "");
 
   if (!userId) {
     return NextResponse.json({ error: "Missing user mapping" }, { status: 400 });

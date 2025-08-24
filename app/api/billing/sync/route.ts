@@ -35,12 +35,13 @@ export async function POST() {
       });
       if (subRes.ok) {
         const sj = await subRes.json();
-        const subs: any[] = sj?.data ?? [];
-        const subMatch = subs.find((s) => {
-          const a = s?.attributes || {};
-          const email = (a?.user_email || "").toLowerCase();
-          const status = (a?.status || "").toLowerCase();
-          const createdAt = a?.created_at ? Date.parse(a.created_at) : 0;
+        const subs: unknown[] = Array.isArray(sj?.data) ? (sj.data as unknown[]) : [];
+        const subMatch = subs.find((raw) => {
+          const s = raw as { attributes?: Record<string, unknown> };
+          const a = (s?.attributes ?? {}) as Record<string, unknown>;
+          const email = typeof a.user_email === "string" ? a.user_email.toLowerCase() : "";
+          const status = typeof a.status === "string" ? a.status.toLowerCase() : "";
+          const createdAt = typeof a.created_at === "string" ? Date.parse(a.created_at) : 0;
           const isRecent = createdAt && now - createdAt < 24 * 60 * 60 * 1000;
           const okStatus = status === "on_trial" || status === "active";
           return email === myEmail && okStatus && isRecent;
@@ -65,13 +66,14 @@ export async function POST() {
       });
       if (res.ok) {
         const json = await res.json();
-        const items: any[] = json?.data ?? [];
-        const match = items.find((it) => {
-          const a = it?.attributes || {};
-          const email = (a?.user_email || "").toLowerCase();
-          const createdAt = a?.created_at ? Date.parse(a.created_at) : 0;
+        const items: unknown[] = Array.isArray(json?.data) ? (json.data as unknown[]) : [];
+        const match = items.find((raw) => {
+          const it = raw as { attributes?: Record<string, unknown> };
+          const a = (it?.attributes ?? {}) as Record<string, unknown>;
+          const email = typeof a.user_email === "string" ? a.user_email.toLowerCase() : "";
+          const createdAt = typeof a.created_at === "string" ? Date.parse(a.created_at) : 0;
           const isRecent = createdAt && now - createdAt < 24 * 60 * 60 * 1000;
-          const isPaid = (a?.status || "").toLowerCase() === "paid";
+          const isPaid = (typeof a.status === "string" ? a.status : "").toLowerCase() === "paid";
           return email === myEmail && isRecent && isPaid;
         });
         if (match) {
@@ -89,10 +91,11 @@ export async function POST() {
     await supabaseServer
       .from("users")
       .update({ subscription_plan: "pro", analyses_remaining: 600 })
-      .eq("id", dbUser.id);
+      .eq("id", dbUser?.id);
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Unexpected error" }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unexpected error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -114,8 +114,9 @@ export default function ResultsPage() {
         setTags(j.tags || null)
         setOverlap(j.keywordOverlap || null)
         setKeywordMetrics(j.keywordMetrics || [])
-      } catch (e: any) {
-        setError(e?.message || "Unexpected error")
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e)
+        setError(message || "Unexpected error")
       } finally {
         setLoading(false)
       }
@@ -144,7 +145,7 @@ export default function ResultsPage() {
         title: "Copied to clipboard",
         description: `${label} has been copied to your clipboard.`,
       })
-    } catch (err) {
+    } catch {
       toast({
         title: "Copy failed",
         description: "Unable to copy to clipboard. Please try again.",

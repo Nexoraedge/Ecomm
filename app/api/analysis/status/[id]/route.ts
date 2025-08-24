@@ -31,7 +31,8 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     return NextResponse.json({ id: data.id, status: data.status, createdAt: data.created_at, completedAt: data.completed_at });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Unexpected error" }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unexpected error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

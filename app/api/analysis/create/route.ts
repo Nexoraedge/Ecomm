@@ -31,7 +31,7 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (userErr) throw userErr;
-      dbUser = data as any;
+      dbUser = (data as { id: string; analyses_remaining: number | null; subscription_plan: string | null } | null);
     }
 
     if (!dbUser) {
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
         .select("id, analyses_remaining, subscription_plan")
         .single();
       if (up.error) throw up.error;
-      dbUser = up.data as any;
+      dbUser = up.data as { id: string; analyses_remaining: number | null; subscription_plan: string | null };
     }
 
     if (!dbUser) {
@@ -86,9 +86,9 @@ export async function POST(req: Request) {
     } catch {}
 
     return NextResponse.json({ id: insert.id, status: "pending" });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("/api/analysis/create error:", e);
-    const msg = e?.message || "Failed to create analysis";
+    const msg = e instanceof Error ? e.message : "Failed to create analysis";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

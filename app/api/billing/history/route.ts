@@ -35,28 +35,37 @@ export async function GET() {
       return NextResponse.json({ error: `Lemon orders error: ${t}` }, { status: 500 });
     }
     const json = await res.json();
-    const items: any[] = json?.data ?? [];
+    const items: unknown[] = Array.isArray(json?.data) ? (json.data as unknown[]) : [];
 
     // Filter by customer email
     const email = (dbUser.email || "").toLowerCase();
     const mapped = items
-      .map((it) => {
-        const a = it?.attributes || {};
+      .map((raw) => {
+        const it = raw as { id?: string; attributes?: Record<string, unknown> };
+        const a = (it?.attributes ?? {}) as Record<string, unknown>;
+        const created_at = typeof a.created_at === "string" ? a.created_at : "";
+        const product_name = typeof a.product_name === "string" ? a.product_name : undefined;
+        const identifier = typeof a.identifier === "string" ? a.identifier : undefined;
+        const total = typeof a.total === "number" ? a.total : 0;
+        const currency = typeof a.currency === "string" ? a.currency : "USD";
+        const status = typeof a.status === "string" ? a.status : "paid";
+        const user_email_raw = typeof a.user_email === "string" ? a.user_email : "";
         return {
           id: it?.id,
-          date: a?.created_at,
-          description: a?.product_name || a?.identifier || "Order",
-          amount: (a?.total || 0) / 100, // cents to dollars
-          currency: a?.currency || "USD",
-          status: a?.status || "paid",
-          user_email: (a?.user_email || "").toLowerCase(),
+          date: created_at,
+          description: product_name || identifier || "Order",
+          amount: total / 100,
+          currency,
+          status,
+          user_email: user_email_raw.toLowerCase(),
         };
       })
       .filter((o) => !email || o.user_email === email)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return NextResponse.json({ data: mapped });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Unexpected error" }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unexpected error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

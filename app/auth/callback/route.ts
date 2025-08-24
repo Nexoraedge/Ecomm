@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   try {
     await supabase.auth.exchangeCodeForSession(code)
-  } catch (_) {
+  } catch {
     return NextResponse.redirect(new URL("/login", req.url))
   }
 

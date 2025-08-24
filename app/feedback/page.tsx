@@ -35,17 +35,17 @@ const faqs = [
   {
     question: "Which eCommerce platforms do you support?",
     answer:
-      "We currently support Amazon, Flipkart, Meesho, Myntra, Ajio, and Nykaa. We're constantly adding new platforms based on user demand. If you need support for a specific platform, please let us know through our feedback form.",
+      "We currently support Amazon, Flipkart, Meesho, Myntra, Ajio, and Nykaa. We\u0026apos;re constantly adding new platforms based on user demand. If you need support for a specific platform, please let us know through our feedback form.",
   },
   {
     question: "Can I cancel my subscription anytime?",
     answer:
-      "Yes, you can cancel your subscription at any time from your billing settings. Your account will remain active until the end of your current billing period, and you'll retain access to all your previous analyses.",
+      "Yes, you can cancel your subscription at any time from your billing settings. Your account will remain active until the end of your current billing period, and you\u0026apos;ll retain access to all your previous analyses.",
   },
   {
     question: "How long does an analysis take?",
     answer:
-      "Most analyses complete within 2-3 minutes. Complex products with many competitors might take up to 5 minutes. You'll receive real-time updates during the process and can cancel at any time.",
+      "Most analyses complete within 2-3 minutes. Complex products with many competitors might take up to 5 minutes. You\u0026apos;ll receive real-time updates during the process and can cancel at any time.",
   },
   {
     question: "Do you offer API access?",
@@ -55,7 +55,7 @@ const faqs = [
   {
     question: "Is my product data secure?",
     answer:
-      "Absolutely. We use enterprise-grade encryption and never share your product data with third parties. Your analyses are private and only accessible to you. We're SOC 2 compliant and follow strict data protection standards.",
+      "Absolutely. We use enterprise-grade encryption and never share your product data with third parties. Your analyses are private and only accessible to you. We\u0026apos;re SOC 2 compliant and follow strict data protection standards.",
   },
 ]
 
@@ -89,7 +89,7 @@ export default function FeedbackPage() {
 
     toast({
       title: "Feedback submitted",
-      description: "Thank you for your feedback! We'll review it and get back to you soon.",
+      description: "Thank you for your feedback! We\u0026apos;ll review it and get back to you soon.",
     })
 
     // Reset form
@@ -97,10 +97,12 @@ export default function FeedbackPage() {
     setFeedback({ category: "", subject: "", message: "" })
   }
 
-  const handleVote = (requestId: number) => {
+  const handleVote = (_requestId: number) => {
+    console.log(_requestId);
+    
     toast({
       title: "Vote recorded",
-      description: "Thanks for voting! We'll prioritize features based on community feedback.",
+      description: "Thanks for voting! We\u0026apos;ll prioritize features based on community feedback.",
     })
   }
 
@@ -247,7 +249,7 @@ export default function FeedbackPage() {
                 <Card className="border-border">
                   <CardHeader>
                     <CardTitle>Feature Requests</CardTitle>
-                    <CardDescription>Vote on features you'd like to see next</CardDescription>
+                    <CardDescription>Vote on features you\u0026apos;d like to see next</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">

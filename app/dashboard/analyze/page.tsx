@@ -86,7 +86,7 @@ export default function AnalyzePage() {
 
     // Ensure exactly one supported platform is selected for backend
     const supported = ["amazon", "flipkart", "meesho"] as const
-    const chosen = selectedPlatforms.find((p) => supported.includes(p as any))
+    const chosen = selectedPlatforms.find((p): p is typeof supported[number] => (supported as readonly string[]).includes(p))
     if (!chosen) {
       toast({ title: "Select a supported platform", description: "Choose Amazon, Flipkart, or Meesho.", variant: "destructive" })
       return
@@ -181,9 +181,10 @@ export default function AnalyzePage() {
       // Immediate check then interval
       await poll()
       pollRef.current = setInterval(poll, 2000)
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e)
-      toast({ title: "Failed to start analysis", description: e.message ?? "Unexpected error", variant: "destructive" })
+      const msg = e instanceof Error ? e.message : "Unexpected error"
+      toast({ title: "Failed to start analysis", description: msg, variant: "destructive" })
       // Cleanup
       setIsScanning(false)
       setProgress(0)
@@ -539,7 +540,7 @@ export default function AnalyzePage() {
             {/* What You'll Get */}
             <Card className="border-border">
               <CardHeader>
-                <CardTitle className="text-lg">What You'll Get</CardTitle>
+                <CardTitle className="text-lg">What You\u0026apos;ll Get</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-3 text-sm">

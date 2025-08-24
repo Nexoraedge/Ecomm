@@ -39,7 +39,8 @@ export async function GET() {
       },
       profile,
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Unexpected error" }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unexpected error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -67,8 +67,6 @@ export default function BillingPage() {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly")
   const [plansState, setPlansState] = useState(initialPlans)
   const [currentPlan, setCurrentPlan] = useState<"free" | "pro" | "enterprise">("free")
-  const [loadingPlan, setLoadingPlan] = useState(true)
-  const [userId, setUserId] = useState<string | null>(null)
   const [monthlyAnalyses, setMonthlyAnalyses] = useState<number>(0)
   const [history, setHistory] = useState<OrderItem[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
@@ -95,7 +93,6 @@ export default function BillingPage() {
         )
 
         if (profile?.id) {
-          setUserId(profile.id)
           // Monthly usage count
           const now = new Date()
           const first = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -108,7 +105,7 @@ export default function BillingPage() {
           setMonthlyAnalyses(count ?? 0)
         }
       } finally {
-        if (active) setLoadingPlan(false)
+        // no-op
       }
     })()
     return () => {
@@ -153,8 +150,9 @@ export default function BillingPage() {
           }
         }
         toast({ title: "Subscription activated", description: "Your Pro plan is now active with 600 credits." })
-      } catch (e: any) {
-        toast({ title: "Sync failed", description: e?.message || "Unexpected error" , variant: "destructive" })
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e)
+        toast({ title: "Sync failed", description: message || "Unexpected error" , variant: "destructive" })
       }
     })()
   }, [supabase, toast])
@@ -201,8 +199,9 @@ export default function BillingPage() {
       } else {
         throw new Error("No checkout URL returned")
       }
-    } catch (e: any) {
-      toast({ title: "Checkout error", description: e?.message || "Unexpected error", variant: "destructive" })
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      toast({ title: "Checkout error", description: message || "Unexpected error", variant: "destructive" })
     }
   }
 
