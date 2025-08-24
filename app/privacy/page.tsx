@@ -151,7 +151,7 @@ export default function PrivacyPolicyPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <h4 className="font-medium text-green-800 mb-2">What We DON'T Share</h4>
+                  <h4 className="font-medium text-green-800 mb-2">What We Don&apos;t Share</h4>
                   <p className="text-sm text-green-700">
                     We never sell, rent, or trade your personal information or product data to third parties for
                     marketing purposes.

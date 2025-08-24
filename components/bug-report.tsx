@@ -25,14 +25,14 @@ export function BugReport() {
   })
   const [screenshot, setScreenshot] = useState<File | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (isSubmitting) return
     setIsSubmitting(true)
     setError(null)
     try {
       // Optional: integrate screenshot upload to storage later; for now pass null URL
-      const screenshotUrl = null as string | null
+      const screenshotUrl: string | null = null
       const browserInfo = typeof navigator !== "undefined" ? navigator.userAgent : undefined
 
       const res = await fetch("/api/bugs/report", {
@@ -58,8 +58,9 @@ export function BugReport() {
         setFormData({ title: "", description: "", category: "", email: "", priority: "medium" })
         setScreenshot(null)
       }, 1500)
-    } catch (err: any) {
-      setError(err?.message || "Unexpected error")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unexpected error"
+      setError(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -143,7 +144,9 @@ export function BugReport() {
                   <Label htmlFor="priority">Priority</Label>
                   <Select
                     value={formData.priority}
-                    onValueChange={(value) => setFormData({ ...formData, priority: value as any })}
+                    onValueChange={(value: "low" | "medium" | "high") =>
+                      setFormData({ ...formData, priority: value })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select priority" />
@@ -188,7 +191,7 @@ export function BugReport() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   />
-                  <p className="text-xs text-muted-foreground">We'll only use this to follow up on your report</p>
+                  <p className="text-xs text-muted-foreground">We&apos;ll only use this to follow up on your report</p>
                 </div>
 
                 <div className="space-y-2">

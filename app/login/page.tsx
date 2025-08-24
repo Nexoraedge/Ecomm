@@ -151,13 +151,19 @@ export default function LoginPage() {
             )}
 
             <div className="text-center text-sm text-muted-foreground">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link href="/login" className="text-primary hover:underline font-medium">
                 Sign up
               </Link>
             </div>
           </CardContent>
         </Card>
+
+        {error && (
+          <p className="text-center text-sm text-red-600 mt-4" role="alert">
+            {error}
+          </p>
+        )}
 
         <p className="text-center text-xs text-muted-foreground mt-8 leading-relaxed">
           By signing in, you agree to our{" "}

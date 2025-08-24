@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Create a Supabase client that reads cookies from the request and writes to the response
-  const supabase = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+  const supabase = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     cookies: {
       get(name: string) {
         return req.cookies.get(name)?.value
