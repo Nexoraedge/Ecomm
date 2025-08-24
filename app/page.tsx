@@ -3,6 +3,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Badge } from "@/components/ui/badge"
 import { Zap, Target, TrendingUp, ArrowRight, BarChart3, Globe } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 
 export default function LandingPage() {
   return (
@@ -11,11 +12,11 @@ export default function LandingPage() {
       <header className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
-                <Zap className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">SEO Boost</span>
+            <div className="flex items-center space-x-3">
+              <Link href="/" className="flex items-center space-x-3">
+                <Image src="/Logo.png" alt="Logo" width={32} height={32} className="rounded" />
+                <span className="text-xl font-bold text-foreground">SEO Boost</span>
+              </Link>
             </div>
             <div className="flex items-center space-x-4">
               <Link href="/login">
@@ -23,8 +24,8 @@ export default function LandingPage() {
                   Sign In
                 </Button>
               </Link>
-              <Link href="/signup">
-                <Button>Start Free Trial</Button>
+              <Link href="/login">
+                <Button>Get Started</Button>
               </Link>
             </div>
           </div>
@@ -49,9 +50,9 @@ export default function LandingPage() {
               top competitors and optimize your listings in minutes.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link href="/signup">
+              <Link href="/login">
                 <Button size="lg" className="text-lg px-8 py-6">
-                  Start Free Trial
+                  Start Now
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
@@ -160,9 +161,9 @@ export default function LandingPage() {
             Join thousands of sellers who are already dominating their markets with AI-powered SEO optimization.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link href="/signup">
+            <Link href="/login">
               <Button size="lg" variant="secondary" className="text-lg px-8 py-6">
-                Start Free Trial
+                Get Started
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
@@ -183,10 +184,8 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-4 gap-8">
             <div>
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
-                  <Zap className="h-5 w-5 text-primary-foreground" />
-                </div>
+              <div className="flex items-center space-x-3 mb-4">
+                <Image src="/Logo.png" alt="Logo" width={32} height={32} className="rounded" />
                 <span className="text-xl font-bold text-foreground">SEO Boost</span>
               </div>
               <p className="text-muted-foreground mb-4">AI-powered eCommerce SEO optimization for sellers worldwide.</p>

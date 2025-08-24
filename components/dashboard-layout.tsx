@@ -24,7 +24,6 @@ import {
 import { LayoutDashboard, Plus, History, FileText, Zap, LogOut, User } from "lucide-react"
 import Link from "next/link"
 import { BugReport } from "@/components/bug-report"
-
 const navigation = [
   {
     name: "Dashboard",

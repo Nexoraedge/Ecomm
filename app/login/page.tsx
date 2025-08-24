@@ -1,14 +1,46 @@
+"use client";
+
+import { useState } from "react";
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
-import { Zap, Mail, Lock, ArrowLeft } from "lucide-react"
+import { Zap, Mail, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { BugReport } from "@/components/bug-report"
+import { getSupabaseBrowser } from "@/lib/supabase-browser"
 
 export default function LoginPage() {
+  const supabase = getSupabaseBrowser();
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/$/, "");
+
+  async function signInWithProvider(provider: "google" | "github") {
+    setError(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: appUrl ? `${appUrl}/dashboard` : undefined,
+      },
+    });
+    if (error) setError(error.message);
+  }
+
+  async function sendMagicLink(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: appUrl ? `${appUrl}/dashboard` : undefined,
+      },
+    });
+    if (error) setError(error.message);
+    else setSent(true);
+  }
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -43,6 +75,7 @@ export default function LoginPage() {
                 variant="outline"
                 className="w-full bg-transparent hover:bg-muted/50 transition-all duration-200"
                 size="lg"
+                onClick={() => signInWithProvider("google")}
               >
                 <svg className="h-5 w-5 mr-3" viewBox="0 0 24 24">
                   <path
@@ -68,11 +101,12 @@ export default function LoginPage() {
                 variant="outline"
                 className="w-full bg-transparent hover:bg-muted/50 transition-all duration-200"
                 size="lg"
+                onClick={() => signInWithProvider("github")}
               >
                 <svg className="h-5 w-5 mr-3" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                  <path d="M12 .5C5.73.5.98 5.24.98 11.5c0 4.85 3.14 8.96 7.49 10.41.55.1.75-.24.75-.53 0-.26-.01-1.12-.02-2.03-3.05.66-3.69-1.3-3.69-1.3-.5-1.28-1.23-1.62-1.23-1.62-1-.68.08-.67.08-.67 1.1.08 1.67 1.12 1.67 1.12.98 1.67 2.57 1.19 3.2.91.1-.71.38-1.19.69-1.46-2.44-.28-5-1.22-5-5.43 0-1.2.43-2.17 1.12-2.94-.11-.28-.49-1.42.1-2.95 0 0 .92-.3 3.02 1.12.88-.25 1.82-.37 2.75-.38.93.01 1.87.13 2.75.38 2.1-1.42 3.02-1.12 3.02-1.12.59 1.53.21 2.67.1 2.95.69.77 1.12 1.74 1.12 2.94 0 4.22-2.57 5.15-5.02 5.43.39.33.74.99.74 1.99 0 1.43-.01 2.59-.01 2.94 0 .29.2.64.75.53 4.35-1.45 7.49-5.56 7.49-10.41C23.02 5.24 18.27.5 12 .5z" />
                 </svg>
-                Continue with LinkedIn
+                Continue with GitHub
               </Button>
             </div>
 
@@ -85,65 +119,40 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Email/Password Form */}
-            <form className="space-y-6">
-              <div className="space-y-3">
-                <Label htmlFor="email" className="text-sm font-medium">
-                  Email address
-                </Label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter your email"
-                    className="pl-12 h-12 bg-muted/30 border-border focus:bg-background transition-colors"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <Label htmlFor="password" className="text-sm font-medium">
-                  Password
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter your password"
-                    className="pl-12 h-12 bg-muted/30 border-border focus:bg-background transition-colors"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Checkbox id="remember" />
-                  <Label htmlFor="remember" className="text-sm font-normal">
-                    Remember me
+            {/* Magic Link */}
+            {sent ? (
+              <p className="text-sm text-center">Magic link sent to <b>{email}</b>. Check your inbox.</p>
+            ) : (
+              <form className="space-y-6" onSubmit={sendMagicLink}>
+                <div className="space-y-3">
+                  <Label htmlFor="email" className="text-sm font-medium">
+                    Email address
                   </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      className="pl-12 h-12 bg-muted/30 border-border focus:bg-background transition-colors"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <Link href="/forgot-password" className="text-sm text-primary hover:underline font-medium">
-                  Forgot password?
-                </Link>
-              </div>
-
-              <Link href="/dashboard">
                 <Button
                   type="submit"
                   className="w-full h-12 text-base font-medium shadow-lg hover:shadow-xl transition-all duration-200"
                 >
-                  Sign in
+                  Send magic link
                 </Button>
-              </Link>
-            </form>
+              </form>
+            )}
 
             <div className="text-center text-sm text-muted-foreground">
               Don't have an account?{" "}
-              <Link href="/signup" className="text-primary hover:underline font-medium">
+              <Link href="/login" className="text-primary hover:underline font-medium">
                 Sign up
               </Link>
             </div>
